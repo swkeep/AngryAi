@@ -18,18 +18,25 @@ function getSpawnLocation(coord)
     return vector4(posX, posY, posZ, heading)
 end
 
-function testSpwan(PlayerCoord, Goal)
-    -- Generates Random Coordinates somewhere on the island
+function AmbushEvent(PlayerCoord, duration, pedsList, VehicleName)
+    -- Generates Random Coordinates somewhere near player
     local Coord = getSpawnLocation(PlayerCoord)
 
     -- Gets the closest road for vehicles to spawn on
     local found, outPos, Heading = GetClosestVehicleNodeWithHeading(Coord.x, Coord.y, Coord.z, 1.0, 1, false)
 
-    local pedRef, vehicleRef = SpawnVehicleWithPedInside({'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01',
-                                                          'g_f_importexport_01'}, 'Moonbeam', outPos, Heading)
-    DriveToGoal(pedRef[1], vehicleRef, PlayerCoord, 'Moonbeam')
-    giveWeaponToCrew(pedRef, 'weapon_smg')
-    CrewAttackTargetedPed(pedRef, PlayerPedId())
+    if found then
+        local pedRef, vehicleRef
+        if duration == 'short' then
+            pedRef, vehicleRef = SpawnVehicleWithPedInside(pedsList, VehicleName, outPos, Heading, 'short')
+        elseif duration == 'long' then
+            pedRef, vehicleRef = SpawnVehicleWithPedInside(pedsList, VehicleName, outPos, Heading, 'long')
+        end
+        -- pedRef[1] is first npc in car 
+        DriveToGoal(pedRef[1], vehicleRef, PlayerCoord, 'Moonbeam')
+        giveWeaponToCrew(pedRef, 'weapon_smg')
+        CrewAttackTargetedPed(pedRef, PlayerPedId())
+    end
 end
 
 --- spwan one vehicle with given models for peds
@@ -38,7 +45,7 @@ end
 ---@param spwanCoord number
 ---@param heading number
 ---@return pedsRef , vehicleRef
-function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading)
+function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading, duration)
     -- Load the models to spawn
     local vehiclemodel = GetHashKey(vehiclemodel)
     local pedsRef = {}
@@ -47,12 +54,18 @@ function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading)
     WaitUntilModelLoaded(vehiclemodel)
     -- Create vehicle + ped
     local pedveh = CreateVehicle(vehiclemodel, spwanCoord.x, spwanCoord.y, spwanCoord.z, heading, true, false)
+    if duration == 'short' then
+        SetEntityAsNoLongerNeeded(pedveh)
+    end
     for key, pedModel in pairs(pedmodels) do
         local tempPedHash = GetHashKey(pedModel)
         WaitUntilModelLoaded(tempPedHash)
         local temp_ped = CreatePedInsideVehicle(pedveh, 2, tempPedHash, (key - 2), true, true)
         SetBlockingOfNonTemporaryEvents(temp_ped, true)
         table.insert(pedsRef, temp_ped)
+        if duration == 'short' then
+            SetEntityAsNoLongerNeeded(temp_ped)
+        end
     end
 
     SetVehicleFixed(pedveh)
@@ -62,19 +75,19 @@ end
 
 --- if ped is in vehicle they gonna move toward given goal
 ---@param ped ped
----@param pedVeh ped
+---@param pedVehicle ped
 ---@param goal coord
----@param VehModel hash
-function DriveToGoal(ped, pedVeh, goal, VehModel)
+---@param vehHash hash
+function DriveToGoal(ped, pedVehicle, goal, vehHash)
     -- Let the car move
-    TaskVehicleDriveToCoord(ped, pedVeh, goal.x, goal.y, goal.z, 50.0, 0, VehModel, 1074528293, 5.0, true)
+    TaskVehicleDriveToCoord(ped, pedVehicle, goal.x, goal.y, goal.z, 50.0, 0, vehHash, 1074528293, 5.0, true)
 end
 
---- AttackTargetedPed() but for table of peds
----@param attackersList table
+--- group of peds to seek and attack one ped
+---@param attackersListByReference table
 ---@param targetPed ped
-function CrewAttackTargetedPed(attackersList, targetPed)
-    for key, ped in pairs(attackersList) do
+function CrewAttackTargetedPed(attackersListByReference, targetPed)
+    for key, ped in pairs(attackersListByReference) do
         AttackTargetedPed(ped, targetPed)
         SetRelationshipBetweenPed(ped)
     end
@@ -85,6 +98,9 @@ end
 ---@param targetPed any
 ---@return void
 function AttackTargetedPed(AttackerPed, targetPed)
+    if not AttackerPed and not targetPed then
+        return
+    end
     SetPedCombatAttributes(AttackerPed --[[ Ped ]] , 46 --[[ integer ]] , 1 --[[ boolean ]] )
     TaskGoToEntityWhileAimingAtEntity(AttackerPed --[[ Ped ]] , targetPed --[[ Entity ]] , targetPed --[[ Entity ]] , 1 --[[ number ]] ,
         1 --[[ boolean ]] , 0 --[[ number ]] , 15 --[[ number ]] , 1 --[[ boolean ]] , 1 --[[ boolean ]] , 1566631136 --[[ Hash ]] )
@@ -94,6 +110,9 @@ end
 --- set relationship with ped againt player. and disable Friendly fire when fighting againt player.
 ---@param ped any
 function SetRelationshipBetweenPed(ped)
+    if not ped then
+        return
+    end
     -- note: if we don't do this they will fight between themselfs!
     RemovePedFromGroup(ped)
     SetPedRelationshipGroupHash(ped, GetHashKey('HATES_PLAYER'))
@@ -114,16 +133,35 @@ end
 ---@param weaponName string
 ---@return void
 function giveWeaponToPed(ped, weaponName)
+    if not ped and not weaponName then
+        return
+    end
     GiveWeaponToPed(ped, GetHashKey(weaponName), 1, false, false)
 end
 
 --- wait for model to load
 ---@param model model
 function WaitUntilModelLoaded(model)
+    if not model then
+        return
+    end
     RequestModel(model)
     while not HasModelLoaded(model) do
         Citizen.Wait(1)
     end
+end
+
+--- it will return 1 or 2 , 1 is what we should aim for
+---@param chance number
+function ChanceToTrigger(chance)
+    -- here we Complete the rest Chances to reach 100% in total in every try and then make EarnedLoot table
+    if not chance then
+        return
+    end
+    local sample
+    local temp = {chance, (100 - chance)}
+    sample = Alias_table_wrapper(temp)
+    return sample
 end
 
 function ActivateWarpInTouch()
