@@ -1,4 +1,5 @@
 local CoreName = exports['qb-core']:GetCoreObject()
+START = true
 
 Citizen.CreateThread(function()
     local PlayerId = PlayerId()
@@ -61,11 +62,9 @@ AddEventHandler('keep-AngryAi:client:spawn', function(model, duration)
     local forward = GetEntityForwardVector(playerPed)
     local x, y, z = table.unpack(coords + forward * 2.0)
 
-
     local pedsList = {'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01', 'g_f_importexport_01'}
     local VehicleName = 'Moonbeam'
     AmbushEvent(coords, duration, pedsList, VehicleName)
-
 
     -- createCrewWithVehicle(model, "Toros", coords)
 
@@ -81,7 +80,12 @@ AddEventHandler('keep-AngryAi:client:spawn', function(model, duration)
     -- )
 end)
 
-function followTargetedPlayer(Attacker, targetPlayer)
-    TaskGotoEntityAiming(Attacker, targetPlayer, 15.0, 5.0)
-end
+RegisterNetEvent('keep-AngryAi:client:Start')
+AddEventHandler('keep-AngryAi:client:Start', function()
+    START = true
+    -- call after player spawned
+end)
 
+function followTargetedPlayer(follower, targetPlayer, distanceToStopAt, StartAimingDist)
+    TaskGotoEntityAiming(follower, targetPlayer, distanceToStopAt, StartAimingDist)
+end

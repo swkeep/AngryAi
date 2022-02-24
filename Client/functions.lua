@@ -1,12 +1,13 @@
 function getSpawnLocation(coord)
-    local radius = 75.0
+    local maxRadius = 75.0
+    local minRadius = 25.0
     local safeCoord, outPosition
     local finished = false
     local index = 0
 
     while finished == false and index <= 1000 do
-        posX = coord.x + math.random(-radius, radius)
-        posY = coord.y + math.random(-radius, radius)
+        posX = coord.x + math.random(math.random(-maxRadius, -minRadius), math.random(minRadius, maxRadius))
+        posY = coord.y + math.random(math.random(-maxRadius, -minRadius), math.random(minRadius, maxRadius))
         Z = coord.z + 999.0
         heading = math.random(0, 359) + .0
         ground, posZ = GetGroundZFor_3dCoord(posX + .0, posY + .0, Z, true)
@@ -18,35 +19,13 @@ function getSpawnLocation(coord)
     return vector4(posX, posY, posZ, heading)
 end
 
-function AmbushEvent(PlayerCoord, duration, pedsList, VehicleName)
-    -- Generates Random Coordinates somewhere near player
-    local Coord = getSpawnLocation(PlayerCoord)
-
-    -- Gets the closest road for vehicles to spawn on
-    local found, outPos, Heading = GetClosestVehicleNodeWithHeading(Coord.x, Coord.y, Coord.z, 1.0, 1, false)
-
-    if found then
-        local pedRef, vehicleRef
-        if duration == 'short' then
-            pedRef, vehicleRef = SpawnVehicleWithPedInside(pedsList, VehicleName, outPos, Heading, 'short')
-        elseif duration == 'long' then
-            pedRef, vehicleRef = SpawnVehicleWithPedInside(pedsList, VehicleName, outPos, Heading, 'long')
-        end
-        -- pedRef[1] is first npc in car 
-        DriveToGoal(pedRef[1], vehicleRef, PlayerCoord, 'Moonbeam')
-        giveWeaponToCrew(pedRef, 'weapon_smg')
-        CrewAttackTargetedPed(pedRef, PlayerPedId())
-        return pedRef , vehicleRef
-    end
-end
-
 --- spwan one vehicle with given models for peds
 ---@param pedmodels models table
 ---@param vehiclemodel model
 ---@param spwanCoord number
 ---@param heading number
 ---@return pedsRef , vehicleRef
-function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading, duration)
+function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading)
     -- Load the models to spawn
     local vehiclemodel = GetHashKey(vehiclemodel)
     local pedsRef = {}
@@ -55,18 +34,13 @@ function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading,
     WaitUntilModelLoaded(vehiclemodel)
     -- Create vehicle + ped
     local pedveh = CreateVehicle(vehiclemodel, spwanCoord.x, spwanCoord.y, spwanCoord.z, heading, true, false)
-    if duration == 'short' then
-        SetEntityAsNoLongerNeeded(pedveh)
-    end
+
     for key, pedModel in pairs(pedmodels) do
         local tempPedHash = GetHashKey(pedModel)
         WaitUntilModelLoaded(tempPedHash)
         local temp_ped = CreatePedInsideVehicle(pedveh, 2, tempPedHash, (key - 2), true, true)
         SetBlockingOfNonTemporaryEvents(temp_ped, true)
         table.insert(pedsRef, temp_ped)
-        if duration == 'short' then
-            SetEntityAsNoLongerNeeded(temp_ped)
-        end
     end
 
     SetVehicleFixed(pedveh)
