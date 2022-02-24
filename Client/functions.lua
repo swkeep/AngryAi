@@ -36,6 +36,7 @@ function AmbushEvent(PlayerCoord, duration, pedsList, VehicleName)
         DriveToGoal(pedRef[1], vehicleRef, PlayerCoord, 'Moonbeam')
         giveWeaponToCrew(pedRef, 'weapon_smg')
         CrewAttackTargetedPed(pedRef, PlayerPedId())
+        return pedRef , vehicleRef
     end
 end
 
@@ -105,6 +106,15 @@ function AttackTargetedPed(AttackerPed, targetPed)
     TaskGoToEntityWhileAimingAtEntity(AttackerPed --[[ Ped ]] , targetPed --[[ Entity ]] , targetPed --[[ Entity ]] , 1 --[[ number ]] ,
         1 --[[ boolean ]] , 0 --[[ number ]] , 15 --[[ number ]] , 1 --[[ boolean ]] , 1 --[[ boolean ]] , 1566631136 --[[ Hash ]] )
     TaskCombatPed(AttackerPed --[[ Ped ]] , targetPed --[[ Ped ]] , 0 --[[ integer ]] , 16 --[[ integer ]] )
+end
+
+--- remove Relationship againt player.
+---@param ped any
+function removeRelationship(ped)
+    if not ped then
+        return
+    end
+    RemovePedFromGroup(ped)
 end
 
 --- set relationship with ped againt player. and disable Friendly fire when fighting againt player.

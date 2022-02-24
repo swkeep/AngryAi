@@ -14,14 +14,17 @@ Config.DEBUG = true -- make sure it's false
 Config.TriggerAttackOnCarAccident = 100 -- 50% chance to trigger
 Config.DefualtAssignedCooldown = 1000 -- 50% chance to trigger
 
+Config.DefualtExpectedEventDuration = 10000 -- after this duration script will give up on NPCs.
+Config.DefualtExpectedPursueDistance = 75 -- distance until NPCs gaveup on pursue
+
 Config.Events = {{
     name = 'Ambush',
     targetPedID = GetPlayerPed(-1),
     timings = {
         ActiveDuration = 5000, -- set free enntites after target left for this duration
-        CooldownDruration = 30000, -- cooldown after triggered once
+        CooldownDruration = 1000, -- cooldown after triggered once
         ChanceToTrigger = 50, -- 50% after every cooldown
-        maximumActiveSessionsForOnePlayer = 0, -- this should controlled by server
+        maximumActiveSessionsForOnePlayer = 1, -- this should controlled by server
         ActiveSessions = 0, -- leave as zero -- this should controlled by server
         AssignedCooldown = 0 -- leave as zero
     },
@@ -33,7 +36,8 @@ Config.Events = {{
 
         local pedsList = {'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01', 'g_f_importexport_01'}
         local VehicleName = 'Moonbeam'
-        AmbushEvent(coords, 'short', pedsList, VehicleName)
+        local entities , vehicleRef = AmbushEvent(coords, 'long', pedsList, VehicleName)
+        FlagAsActiveEntities(entities , vehicleRef , GetPlayerPed(-1))
     end
 }}
 

@@ -1,6 +1,6 @@
 -- global event Ai management
 local activeEvents = {}
-local activeEntites = {}
+local activeEntities = {}
 --
 local loadingIsDone = false
 -- events
@@ -13,6 +13,55 @@ Citizen.CreateThread(function()
     end
     loadingIsDone = true
 end)
+
+-- Entities management system
+Citizen.CreateThread(function()
+    while true do
+        Wait(1000)
+        for key, entity in pairs(activeEntities) do
+            for ped, info in pairs(entity) do
+                if isTargetedPedDead(info.targetedPed) == 1 then
+                    leaveAreaWhenEventIsOver(ped, info)
+                    activeEntities[key] = nil -- clean table as we no longer need information about peds
+                    updateActiveSessionsValue(Event, 'increment')
+                end
+            end
+        end
+        print(#activeEntities)
+    end
+end)
+
+function leaveAreaWhenEventIsOver(ped, info)
+    TaskEnterVehicle(ped, info.vehicleRef, 10.0, info.seatIndex, 2.0, 1, 0)
+    if info.seatIndex == -1 then
+        TaskVehicleDriveWander(ped --[[ Ped ]] , info.vehicleRef --[[ Vehicle ]] , 60.0 --[[ number ]] , 1074528293 --[[ integer ]] )
+    end
+    FlagEntityAsNoLongerNeeded(ped)
+end
+
+function isExpectedDurationReached(currentDuration)
+    if currentDuration <= 0 then
+        return true
+    elseif Config.DefualtExpectedEventDuration - currentDuration > 0 then
+        return false
+    end
+end
+
+function GetDistanceBetweenTwoEntities(firstEntity, secondEntity)
+    return #(firstEntity.xy - secondEntity.xy) -- Do not use Z
+end
+
+function isTargetedPedDead(target)
+    local state
+    -- IsEntityPlayingAnim(target, 'dead', 'dead_a', 3) or IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)
+    -- these are needed when player's ped are playing bleeding animation or script will count then as not dead
+    state = IsPedDeadOrDying(target, 1)
+    state = IsPlayerDead(target)
+    state = IsEntityDead(target)
+    state = IsEntityPlayingAnim(target, 'dead', 'dead_a', 3)
+    state = IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)
+    return state
+end
 
 -- > expire event thread Event.timings.ActiveDuration
 
@@ -36,6 +85,29 @@ Citizen.CreateThread(function()
         end
     end
 end)
+
+function FlagAsActiveEntities(entities, vehicleRef, targetedPed)
+    local tmp = {}
+    for key, entity in pairs(entities) do
+        tmp[entity] = {
+            type = GetEntityType(entity),
+            vehicleRef = vehicleRef,
+            seatIndex = (key - 2),
+            duration = Config.DefualtExpectedEventDuration,
+            distance = Config.DefualtExpectedPursueDistance,
+            targetedPed = targetedPed,
+            redirectTargetTo = ''
+        }
+    end
+    table.insert(activeEntities, tmp)
+end
+
+--- Ask game engine to flag entity as no longer needed
+---@param entity entity
+---@return void
+function FlagEntityAsNoLongerNeeded(entity)
+    SetEntityAsNoLongerNeeded(entity)
+end
 
 --- assgin value of ActiveSessions to make sure it's always 0 at start of script
 ---@param Event number
