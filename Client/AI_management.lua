@@ -1,3 +1,4 @@
+local interval = Config.TimeInterval
 -- global event Ai management
 local activeEvents = {}
 local activeEntities = {}
@@ -5,12 +6,27 @@ local activeEntities = {}
 local loadingIsDone = false
 -- events loader
 Citizen.CreateThread(function()
-    -- loading event inside activeEvents table
+    -- loading events
+
     for key, Event in pairs(Config.Events) do
-        assignCooldownValue(Event)
-        assignActiveSessionsValue(Event)
-        table.insert(activeEvents, Event)
+        local error = {}
+        if Event.timings.CooldownDruration >= interval then
+            assignCooldownValue(Event) -- create new filed in event to keep track of cooldown
+            assignActiveSessionsValue(Event) -- create new filed in event to keep track of active sessions
+            table.insert(activeEvents, Event)
+            error = nil
+        elseif Event.timings.CooldownDruration < interval then
+            error = {
+                eventName = Event.name,
+                error = 'CooldownDruration cant be less than script interval'
+            }
+        end
+        if error ~= nil then
+            print('failed to load: ')
+            print_table(error)
+        end
     end
+    print('events loaded:', #activeEvents)
     loadingIsDone = true
 end)
 
@@ -18,58 +34,28 @@ local NPC_RelaseQueue = {}
 -- Entities management system
 Citizen.CreateThread(function()
     while true do
-        Wait(1000)
+        Wait(interval)
         for key, entity in pairs(activeEntities) do
             for ped, info in pairs(entity) do
-                -- remove entities from Queue
+                -- force remove entities
                 if NPC_RelaseQueue ~= nil then
-                    for key, NPC_RelaseQueue_PED in pairs(NPC_RelaseQueue) do
-                        if ped == NPC_RelaseQueue_PED then
-                            ClearPedTasks(NPC_RelaseQueue_PED)
-                            FlagEntityAsNoLongerNeeded(NPC_RelaseQueue_PED)
-                            updateActiveSessionsValue(info.event, 'decrement')
-                            activeEntities[info.eventKey][NPC_RelaseQueue_PED] =
-                                nil
-                            NPC_RelaseQueue[key] = nil
-                            goto continue
-                        end
-                    end
+                    RelaseEntityLogic(NPC_RelaseQueue, ped, info)
                 end
                 -- giveup on target death
-                if isTargetedPedDead(info.targetedPed) == true then
-                    ClearPedTasks(ped)
-                    leaveArea(ped, info)
-                    -- SetEntityHealth(ped, 0) --kill ped when it's done
-                    updateActiveSessionsValue(info.event, 'decrement')
-                    activeEntities[info.eventKey][ped] = nil -- clean table as we no longer need information about peds
-                end
+                KeepTrackOfTragetDeath(info, ped)
+
+                -- keep track of death and entity existence
+                KeepTrackOfEntityDeath(info, ped)
+                KeepTackOfEntityExistence(info, ped)
+
                 -- keep track of Events duration Event.timings.ActiveDuration
+                EventDurationTracker(info, ped)
 
-                -- print(info.event.timings.ActiveSessions)
-                -- print(info.event.timings.AssignedCooldown)
-
-                -- keep track of events duration distance
-
+                -- keep track of distance
                 local distance = GetDistanceBetweenTwoEntities(info.targetedPed,
                                                                ped)
+                TrackEventNpcDistance(distance, ped, info)
 
-                if distance <= 5 then
-                    PlayPedAmbientSpeechNative(ped, 'GENERIC_HI',
-                                               'Speech_Params_Allow_Repeat')
-                elseif distance > 130 then
-                    FlagEntityAsNoLongerNeeded(ped)
-                    updateActiveSessionsValue(info.event, 'decrement')
-                    activeEntities[info.eventKey][ped] = nil
-                end
-
-                -- print(ped, IsEntityDead(ped), DoesEntityExist(ped))
-                -- keep track of death and entity existence
-                if IsEntityDead(ped) == 1 or DoesEntityExist(ped) == false then
-                    FlagEntityAsNoLongerNeeded(ped)
-                    updateActiveSessionsValue(info.event, 'decrement')
-                    activeEntities[info.eventKey][ped] = nil
-                end
-                ::continue::
             end
         end
         -- print_table(activeEntities)
@@ -77,87 +63,93 @@ Citizen.CreateThread(function()
     end
 end)
 
-function print_table(node)
-    local cache, stack, output = {}, {}, {}
-    local depth = 1
-    local output_str = "{\n"
+function EventDurationTracker(info, ped)
+    if info.event.timings.AssignedDuration ~= nil and
+        info.event.timings.AssignedDuration ~= 0 then
+        info.event.timings.AssignedDuration = info.event.timings
+                                                  .AssignedDuration - 1000
+    elseif info.event.timings.AssignedDuration == 0 then
+        RelaseThisEntityNow(ped)
+    end
+end
 
-    while true do
-        local size = 0
-        for k, v in pairs(node) do size = size + 1 end
+function KeepTackOfEntityExistence(info, ped)
+    if DoesEntityExist(ped) == false then
+        FlagEntityAsNoLongerNeeded(ped)
+        updateActiveSessionsValue(info.event, 'decrement')
+        activeEntities[info.eventKey][ped] = nil
+    end
+end
 
-        local cur_index = 1
-        for k, v in pairs(node) do
-            if (cache[node] == nil) or (cur_index >= cache[node]) then
+function KeepTrackOfEntityDeath(info, ped)
+    if IsEntityDead(ped) == 1 then
+        FlagEntityAsNoLongerNeeded(ped)
+        updateActiveSessionsValue(info.event, 'decrement')
+        activeEntities[info.eventKey][ped] = nil
+    end
+end
 
-                if (string.find(output_str, "}", output_str:len())) then
-                    output_str = output_str .. ",\n"
-                elseif not (string.find(output_str, "\n", output_str:len())) then
-                    output_str = output_str .. "\n"
-                end
+function KeepTrackOfTragetDeath(info, ped)
+    if isTargetedPedDead(info.targetedPed) == true then
+        ClearPedTasks(ped)
+        leaveArea(ped, info)
+        -- SetEntityHealth(ped, 0) --kill ped when it's done
+        updateActiveSessionsValue(info.event, 'decrement')
+        activeEntities[info.eventKey][ped] = nil -- clean table as we no longer need information about peds
+    end
+end
 
-                -- This is necessary for working with HUGE tables otherwise we run out of memory using concat on huge strings
-                table.insert(output, output_str)
-                output_str = ""
+function TrackEventNpcDistance(distance, ped, info)
+    if type(info.event.customDistance) == "function" then
+        -- run customDistance if we have it in config file if not used default function
+        info.event.customDistance(distance, ped, info.event)
+        return
+    end
+    if distance <= 5 then
+        PlayPedAmbientSpeechNative(ped, 'GENERIC_HI',
+                                   'Speech_Params_Allow_Repeat')
+    elseif distance > 130 then
+        FlagEntityAsNoLongerNeeded(ped)
+        updateActiveSessionsValue(info.event, 'decrement')
+        activeEntities[info.eventKey][ped] = nil
+    end
+end
 
-                local key
-                if (type(k) == "number" or type(k) == "boolean") then
-                    key = "[" .. tostring(k) .. "]"
-                else
-                    key = "['" .. tostring(k) .. "']"
-                end
-
-                if (type(v) == "number" or type(v) == "boolean") then
-                    output_str = output_str .. string.rep('\t', depth) .. key ..
-                                     " = " .. tostring(v)
-                elseif (type(v) == "table") then
-                    output_str = output_str .. string.rep('\t', depth) .. key ..
-                                     " = {\n"
-                    table.insert(stack, node)
-                    table.insert(stack, v)
-                    cache[node] = cur_index + 1
-                    break
-                else
-                    output_str = output_str .. string.rep('\t', depth) .. key ..
-                                     " = '" .. tostring(v) .. "'"
-                end
-
-                if (cur_index == size) then
-                    output_str = output_str .. "\n" ..
-                                     string.rep('\t', depth - 1) .. "}"
-                else
-                    output_str = output_str .. ","
-                end
-            else
-                -- close the table
-                if (cur_index == size) then
-                    output_str = output_str .. "\n" ..
-                                     string.rep('\t', depth - 1) .. "}"
-                end
+function RelaseEntityLogic(NPC_RelaseQueue, ped, info)
+    for key, RelaseEntity in pairs(NPC_RelaseQueue) do
+        local type = GetEntityType(RelaseEntity)
+        if type == 1 then
+            if ped == RelaseEntity then
+                ClearPedTasks(RelaseEntity)
+                FlagEntityAsNoLongerNeeded(RelaseEntity)
+                updateActiveSessionsValue(info.event, 'decrement')
+                activeEntities[info.eventKey][RelaseEntity] = nil
+                NPC_RelaseQueue[key] = nil
+                goto continue
             end
-
-            cur_index = cur_index + 1
-        end
-
-        if (size == 0) then
-            output_str = output_str .. "\n" .. string.rep('\t', depth - 1) ..
-                             "}"
-        end
-
-        if (#stack > 0) then
-            node = stack[#stack]
-            stack[#stack] = nil
-            depth = cache[node] == nil and depth + 1 or depth - 1
-        else
-            break
+        elseif type == 2 then
+            -- # TODO qbtarget sup for vehicles ????????
+            -- local maxSeat = GetVehicleMaxNumberOfPassengers(RelaseEntity) -- from -1 to whatever
+            -- for i = -1, maxSeat, 1 do
+            --     local ped = GetPedInVehicleSeat(RelaseEntity, i)
+            --     ClearPedTasks(ped)
+            --     leaveArea(ped, {
+            --         vehicle = {
+            --             vehicleRef = RelaseEntity,
+            --             seatIndex = i
+            --         }
+            --     })
+            --     if i == maxSeat then
+            --         FlagEntityAsNoLongerNeeded(RelaseEntity)
+            --         updateActiveSessionsValue(info.event,
+            --                                   'decrement')
+            --         goto continue
+            --     end
+            -- end
+            -- IsVehicleSeatFree(vehicle, seatIndex)
         end
     end
-
-    -- This is necessary for working with HUGE tables otherwise we run out of memory using concat on huge strings
-    table.insert(output, output_str)
-    output_str = table.concat(output)
-
-    print(output_str)
+    ::continue::
 end
 
 function RelaseThisEntityNow(entity) table.insert(NPC_RelaseQueue, entity) end
@@ -167,8 +159,8 @@ function leaveArea(ped, info)
         TaskEnterVehicle(ped, info.vehicle.vehicleRef, 10.0,
                          info.vehicle.seatIndex, 2.0, 1, 0)
         if info.vehicle.seatIndex == -1 then
-            TaskVehicleDriveWander(ped --[[ Ped ]] , info.vehicle.vehicleRef --[[ Vehicle ]] ,
-                                   60.0 --[[ number ]] , 1074528293 --[[ integer ]] )
+            TaskVehicleDriveWander(ped --[[ Ped ]] , info.vehicle.vehicleRef,
+                                   60.0 --[[ number ]] , 1074528293)
         end
     end
     FlagEntityAsNoLongerNeeded(ped)
@@ -178,7 +170,7 @@ Citizen.CreateThread(function()
     -- excute events
     WaitUntilEventsAreLoaded(loadingIsDone)
     while true do
-        Wait(1000)
+        Wait(interval)
         for key, Event in pairs(activeEvents) do
             -- call event when cooldown is over
             if Event.timings.ActiveSessions >=
@@ -192,6 +184,7 @@ Citizen.CreateThread(function()
                 local ped, veh, target = Event['Function']()
                 FlagAsActiveEntities(ped, veh, target, Event, key)
                 Event.timings.AssignedCooldown = Event.timings.CooldownDruration -- reset cooldown after running it once
+                Event.timings.AssignedDuration = Event.timings.ActiveDuration
                 updateActiveSessionsValue(Event, 'increment')
             end
             ::continue:: -- pretend i did't use goto :(
@@ -213,7 +206,6 @@ function FlagAsActiveEntities(entities, vehicleRef, targetedPed, event, eventKey
             entityData[entity] = {
                 type = GetEntityType(entity),
                 duration = Config.DefualtExpectedEventDuration,
-                distance = Config.DefualtExpectedPursueDistance,
                 targetedPed = targetedPed,
                 event = event,
                 eventKey = eventKey
@@ -234,7 +226,6 @@ function FlagAsActiveEntities(entities, vehicleRef, targetedPed, event, eventKey
         entityData[entities] = {
             type = GetEntityType(entities),
             duration = Config.DefualtExpectedEventDuration,
-            distance = Config.DefualtExpectedPursueDistance,
             targetedPed = targetedPed,
             event = event,
             eventKey = eventKey
@@ -250,20 +241,6 @@ function FlagAsActiveEntities(entities, vehicleRef, targetedPed, event, eventKey
         else
             activeEntities[eventKey][entities] = entityData[entities]
         end
-    end
-end
-
-function TableAppend(t1, t2)
-    -- A numeric for loop is faster than pairs, but it only gets the sequential part of t2
-    for i = 1, #t2 do
-        t1[#t1 + 1] = t2[i] -- this is slightly faster than table.insert
-    end
-
-    -- This loop gets the non-sequential part (e.g. ['a'] = 1), if it exists
-    local k, v = next(t2, #t2 ~= 0 and #t2 or nil)
-    while k do
-        t1[k] = v -- if index k already exists in t1 then it will be overwritten
-        k, v = next(t2, k)
     end
 end
 
@@ -332,7 +309,7 @@ end
 --- assgin value of AssignedCooldown inside events to start cooldown for evetns
 ---@param Event number
 function assignCooldownValue(Event)
-    if Event.timings.CooldownDruration == nil or Event.timings.CooldownDruration then
+    if Event.timings.CooldownDruration == nil then
         Event.timings.AssignedCooldown = Config.DefualtAssignedCooldown
     end
     Event.timings.AssignedCooldown = Event.timings.CooldownDruration
