@@ -1,4 +1,3 @@
-local CoreName = exports['qb-core']:GetCoreObject()
 START = true
 
 -- # TODO Add heli fight
