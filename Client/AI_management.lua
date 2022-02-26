@@ -38,8 +38,9 @@ Citizen.CreateThread(function()
         for key, entity in pairs(activeEntities) do
             for ped, info in pairs(entity) do
                 -- force remove entities
-                if NPC_RelaseQueue ~= nil then
+                if next(NPC_RelaseQueue) ~= nil then
                     RelaseEntityLogic(NPC_RelaseQueue, ped, info)
+                    goto skip
                 end
                 -- giveup on target death
                 KeepTrackOfTragetDeath(info, ped)
@@ -56,6 +57,7 @@ Citizen.CreateThread(function()
                                                                ped)
                 TrackEventNpcDistance(distance, ped, info)
 
+                ::skip::
             end
         end
         -- print_table(activeEntities)
@@ -125,7 +127,6 @@ function RelaseEntityLogic(NPC_RelaseQueue, ped, info)
                 updateActiveSessionsValue(info.event, 'decrement')
                 activeEntities[info.eventKey][RelaseEntity] = nil
                 NPC_RelaseQueue[key] = nil
-                goto continue
             end
         elseif type == 2 then
             -- # TODO qbtarget sup for vehicles ????????
@@ -149,7 +150,6 @@ function RelaseEntityLogic(NPC_RelaseQueue, ped, info)
             -- IsVehicleSeatFree(vehicle, seatIndex)
         end
     end
-    ::continue::
 end
 
 function RelaseThisEntityNow(entity) table.insert(NPC_RelaseQueue, entity) end

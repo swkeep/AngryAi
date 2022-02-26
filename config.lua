@@ -59,14 +59,14 @@ Config.Events = {
                 -- giveWeaponToCrew(entities, 'weapon_smg')
                 -- CrewAttackTargetedPed(entities, playerPed)
                 -- # TODO qbtarget sup for vehicles ????????
-                -- assignQbTargetToEntity(vehicleRef)
+                -- InitQbTargetForEntity(vehicleRef)
                 return entities, vehicleRef, playerPed
             end
         end
     }, {
         name = 'SeekPlayer',
         timings = {
-            ActiveDuration = 20000, -- event and npcs are active until this value reach zero 
+            ActiveDuration = 50000, -- event and npcs are active until this value reach zero 
             CooldownDruration = 5000, -- cooldown after triggered once
             ChanceToTrigger = 100, -- 50% after every cooldown
             maximumActiveSessionsForOnePlayer = 1 -- this should controlled by server
@@ -76,24 +76,28 @@ Config.Events = {
             return isTargetedPedDead(playerPed)
         end,
         customDistance = function(distance, ped, info)
-            print(distance, ped)
+            if distance <= 5 then
+                ChatWithTarget(ped, GetPlayerPed(-1))
+                PlayPedAmbientSpeechNative(ped, 'GENERIC_HI',
+                                           'Speech_Params_Allow_Repeat')
+            end
         end,
         Function = function()
             local playerPed = PlayerPedId()
             local coords = GetEntityCoords(playerPed)
-            local forward = GetEntityForwardVector(playerPed)
-            -- local x, y, z = table.unpack(coords + forward * 2.0)
             local x, y, z = table.unpack(getSpawnLocation(coords))
 
             local pedHash = GetHashKey('S_M_M_HighSec_05')
 
             WaitUntilModelLoaded(pedHash)
             local ped = CreatePed(2, pedHash, x, y, z, 0, true, false)
+            SetPedAudioGender(ped, true)
+            GivePedRandomVoice(ped, 'MALE', 'LATINO') -- set voice for ped!
             followTargetedPlayer(ped, playerPed, 3.0, 5.0)
 
             -- TaskLookAtEntity(ped, playerPed, 60.0, 2048, 3)
 
-            assignQbTargetToEntity(ped)
+            InitQbTargetForEntity(ped)
             return {ped}, nil, playerPed
         end
     }, {
@@ -111,8 +115,6 @@ Config.Events = {
         Function = function()
             local playerPed = PlayerPedId()
             local coords = GetEntityCoords(playerPed)
-            local forward = GetEntityForwardVector(playerPed)
-            -- local x, y, z = table.unpack(coords + forward * 2.0)
             local x, y, z = table.unpack(getSpawnLocation(coords))
 
             local pedHash = GetHashKey('S_M_M_HighSec_05')
@@ -123,20 +125,13 @@ Config.Events = {
 
             -- TaskLookAtEntity(ped, playerPed, 60.0, 2048, 3)
 
-            assignQbTargetToEntity(ped)
+            InitQbTargetForEntity(ped)
             return ped, nil, playerPed
         end
     }
 }
 
---- func desc
----@param ped any
----@param target any
-function chatWithTarget(ped, target)
-    TaskChatToPed(ped, target, 17, 0.0, 0.0, 0.0, 0.0, 0.0)
-end
-
-function assignQbTargetToEntity(Entity)
+function InitQbTargetForEntity(Entity)
     exports['qb-target']:AddTargetEntity(Entity, {
         options = {
             {
@@ -153,7 +148,9 @@ function assignQbTargetToEntity(Entity)
                     RelaseThisEntityNow(entity)
                 end,
                 canInteract = function(entity, distance, data)
-                    if IsPedAPlayer(entity) then return false end
+                    if IsPedAPlayer(entity) or IsEntityDead(entity) == 1 then
+                        return false
+                    end
                     return true
                 end
             }
