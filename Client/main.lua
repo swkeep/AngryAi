@@ -1,6 +1,12 @@
 local CoreName = exports['qb-core']:GetCoreObject()
 START = true
 
+-- # TODO Add heli fight
+-- # TODO Add heli fight
+-- # TODO Add heli fight
+-- # TODO Add heli fight
+
+
 Citizen.CreateThread(function()
     local PlayerId = PlayerId()
     local PlayerPedId = PlayerPedId()

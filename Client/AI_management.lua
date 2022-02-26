@@ -28,48 +28,147 @@ Citizen.CreateThread(function()
                             ClearPedTasks(NPC_RelaseQueue_PED)
                             FlagEntityAsNoLongerNeeded(NPC_RelaseQueue_PED)
                             updateActiveSessionsValue(info.event, 'decrement')
-                            activeEntities[NPC_RelaseQueue_PED] = nil
+                            activeEntities[info.eventKey][NPC_RelaseQueue_PED] =
+                                nil
                             NPC_RelaseQueue[key] = nil
                             goto continue
                         end
                     end
                 end
                 -- giveup on target death
-                if isTargetedPedDead(info.targetedPed) == 1 then
+                if isTargetedPedDead(info.targetedPed) == true then
                     ClearPedTasks(ped)
                     leaveArea(ped, info)
                     -- SetEntityHealth(ped, 0) --kill ped when it's done
-                    activeEntities[key] = nil -- clean table as we no longer need information about peds
                     updateActiveSessionsValue(info.event, 'decrement')
+                    activeEntities[info.eventKey][ped] = nil -- clean table as we no longer need information about peds
                 end
                 -- keep track of Events duration Event.timings.ActiveDuration
 
-                --print(info.event.timings.ActiveSessions)
+                -- print(info.event.timings.ActiveSessions)
                 -- print(info.event.timings.AssignedCooldown)
 
                 -- keep track of events duration distance
 
-                local distance = GetDistanceBetweenTwoEntities(info.targetedPed, ped)
+                local distance = GetDistanceBetweenTwoEntities(info.targetedPed,
+                                                               ped)
+
                 if distance <= 5 then
-                    PlayPedAmbientSpeechNative(ped , 'GENERIC_HI'  , 'Speech_Params_Allow_Repeat'  )
+                    PlayPedAmbientSpeechNative(ped, 'GENERIC_HI',
+                                               'Speech_Params_Allow_Repeat')
+                elseif distance > 130 then
+                    FlagEntityAsNoLongerNeeded(ped)
+                    updateActiveSessionsValue(info.event, 'decrement')
+                    activeEntities[info.eventKey][ped] = nil
+                end
+
+                -- print(ped, IsEntityDead(ped), DoesEntityExist(ped))
+                -- keep track of death and entity existence
+                if IsEntityDead(ped) == 1 or DoesEntityExist(ped) == false then
+                    FlagEntityAsNoLongerNeeded(ped)
+                    updateActiveSessionsValue(info.event, 'decrement')
+                    activeEntities[info.eventKey][ped] = nil
                 end
                 ::continue::
             end
         end
-        -- print(#activeEntities)
+        -- print_table(activeEntities)
         -- tprint(NPC_RelaseQueue)
     end
 end)
 
-function RelaseThisEntityNow(entity)
-    table.insert(NPC_RelaseQueue, entity)
+function print_table(node)
+    local cache, stack, output = {}, {}, {}
+    local depth = 1
+    local output_str = "{\n"
+
+    while true do
+        local size = 0
+        for k, v in pairs(node) do size = size + 1 end
+
+        local cur_index = 1
+        for k, v in pairs(node) do
+            if (cache[node] == nil) or (cur_index >= cache[node]) then
+
+                if (string.find(output_str, "}", output_str:len())) then
+                    output_str = output_str .. ",\n"
+                elseif not (string.find(output_str, "\n", output_str:len())) then
+                    output_str = output_str .. "\n"
+                end
+
+                -- This is necessary for working with HUGE tables otherwise we run out of memory using concat on huge strings
+                table.insert(output, output_str)
+                output_str = ""
+
+                local key
+                if (type(k) == "number" or type(k) == "boolean") then
+                    key = "[" .. tostring(k) .. "]"
+                else
+                    key = "['" .. tostring(k) .. "']"
+                end
+
+                if (type(v) == "number" or type(v) == "boolean") then
+                    output_str = output_str .. string.rep('\t', depth) .. key ..
+                                     " = " .. tostring(v)
+                elseif (type(v) == "table") then
+                    output_str = output_str .. string.rep('\t', depth) .. key ..
+                                     " = {\n"
+                    table.insert(stack, node)
+                    table.insert(stack, v)
+                    cache[node] = cur_index + 1
+                    break
+                else
+                    output_str = output_str .. string.rep('\t', depth) .. key ..
+                                     " = '" .. tostring(v) .. "'"
+                end
+
+                if (cur_index == size) then
+                    output_str = output_str .. "\n" ..
+                                     string.rep('\t', depth - 1) .. "}"
+                else
+                    output_str = output_str .. ","
+                end
+            else
+                -- close the table
+                if (cur_index == size) then
+                    output_str = output_str .. "\n" ..
+                                     string.rep('\t', depth - 1) .. "}"
+                end
+            end
+
+            cur_index = cur_index + 1
+        end
+
+        if (size == 0) then
+            output_str = output_str .. "\n" .. string.rep('\t', depth - 1) ..
+                             "}"
+        end
+
+        if (#stack > 0) then
+            node = stack[#stack]
+            stack[#stack] = nil
+            depth = cache[node] == nil and depth + 1 or depth - 1
+        else
+            break
+        end
+    end
+
+    -- This is necessary for working with HUGE tables otherwise we run out of memory using concat on huge strings
+    table.insert(output, output_str)
+    output_str = table.concat(output)
+
+    print(output_str)
 end
 
+function RelaseThisEntityNow(entity) table.insert(NPC_RelaseQueue, entity) end
+
 function leaveArea(ped, info)
-    if info.vehicleRef ~= nil then
-        TaskEnterVehicle(ped, info.vehicleRef, 10.0, info.seatIndex, 2.0, 1, 0)
-        if info.seatIndex == -1 then
-            TaskVehicleDriveWander(ped --[[ Ped ]] , info.vehicleRef --[[ Vehicle ]] , 60.0 --[[ number ]] , 1074528293 --[[ integer ]] )
+    if info.vehicle ~= nil then
+        TaskEnterVehicle(ped, info.vehicle.vehicleRef, 10.0,
+                         info.vehicle.seatIndex, 2.0, 1, 0)
+        if info.vehicle.seatIndex == -1 then
+            TaskVehicleDriveWander(ped --[[ Ped ]] , info.vehicle.vehicleRef --[[ Vehicle ]] ,
+                                   60.0 --[[ number ]] , 1074528293 --[[ integer ]] )
         end
     end
     FlagEntityAsNoLongerNeeded(ped)
@@ -82,10 +181,13 @@ Citizen.CreateThread(function()
         Wait(1000)
         for key, Event in pairs(activeEvents) do
             -- call event when cooldown is over
-            if Event.timings.ActiveSessions >= Event.timings.maximumActiveSessionsForOnePlayer then
+            if Event.timings.ActiveSessions >=
+                Event.timings.maximumActiveSessionsForOnePlayer then
                 goto continue
             end
-            if Event.timings.AssignedCooldown == 0 and ChanceToTrigger(Event.timings.ChanceToTrigger) == 1 then
+            if Event['isTargetDead']() == false and
+                Event.timings.AssignedCooldown == 0 and
+                ChanceToTrigger(Event.timings.ChanceToTrigger) == 1 then
                 print('event ' .. Event.name .. ' is triggered')
                 local ped, veh, target = Event['Function']()
                 FlagAsActiveEntities(ped, veh, target, Event, key)
@@ -105,10 +207,32 @@ end)
 ---@param event any
 ---@param eventKey any
 function FlagAsActiveEntities(entities, vehicleRef, targetedPed, event, eventKey)
-    local EntityData = {}
-    for key, entity in pairs(entities) do
-        EntityData[entity] = {
-            type = GetEntityType(entity),
+    local entityData = {}
+    if type(entities) == "table" then
+        for key, entity in pairs(entities) do
+            entityData[entity] = {
+                type = GetEntityType(entity),
+                duration = Config.DefualtExpectedEventDuration,
+                distance = Config.DefualtExpectedPursueDistance,
+                targetedPed = targetedPed,
+                event = event,
+                eventKey = eventKey
+            }
+            if vehicleRef ~= nil then
+                entityData[entity].vehicle = {
+                    vehicleRef = vehicleRef,
+                    seatIndex = (key - 2)
+                }
+            end
+        end
+        if activeEntities[eventKey] == nil then
+            activeEntities[eventKey] = entityData
+        else
+            TableAppend(activeEntities[eventKey], entityData)
+        end
+    elseif type(entities) == "number" then
+        entityData[entities] = {
+            type = GetEntityType(entities),
             duration = Config.DefualtExpectedEventDuration,
             distance = Config.DefualtExpectedPursueDistance,
             targetedPed = targetedPed,
@@ -116,13 +240,31 @@ function FlagAsActiveEntities(entities, vehicleRef, targetedPed, event, eventKey
             eventKey = eventKey
         }
         if vehicleRef ~= nil then
-            EntityData[entity].vehicle = {
+            entityData[entities].vehicle = {
                 vehicleRef = vehicleRef,
-                seatIndex = (key - 2)
+                seatIndex = -1
             }
         end
+        if activeEntities[eventKey] == nil then
+            activeEntities[eventKey] = entityData
+        else
+            activeEntities[eventKey][entities] = entityData[entities]
+        end
     end
-    table.insert(activeEntities, EntityData)
+end
+
+function TableAppend(t1, t2)
+    -- A numeric for loop is faster than pairs, but it only gets the sequential part of t2
+    for i = 1, #t2 do
+        t1[#t1 + 1] = t2[i] -- this is slightly faster than table.insert
+    end
+
+    -- This loop gets the non-sequential part (e.g. ['a'] = 1), if it exists
+    local k, v = next(t2, #t2 ~= 0 and #t2 or nil)
+    while k do
+        t1[k] = v -- if index k already exists in t1 then it will be overwritten
+        k, v = next(t2, k)
+    end
 end
 
 --- isExpectedDurationReached
@@ -147,23 +289,21 @@ end
 --- isTargetedPedDead?
 ---@param target ped
 function isTargetedPedDead(target)
-    local state
+    local state = {
+        IsPedDeadOrDying(target, 1), IsPlayerDead(target), IsEntityDead(target),
+        IsEntityPlayingAnim(target, 'dead', 'dead_a', 3),
+        IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)
+    }
     -- IsEntityPlayingAnim(target, 'dead', 'dead_a', 3) or IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)
     -- these are needed when player's ped are playing bleeding animation or script will count then as not dead
-    state = IsPedDeadOrDying(target, 1)
-    state = IsPlayerDead(target)
-    state = IsEntityDead(target)
-    state = IsEntityPlayingAnim(target, 'dead', 'dead_a', 3)
-    state = IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)
-    return state
+    for key, value in pairs(state) do if value == 1 then return true end end
+    return false
 end
 
 --- Ask game engine to flag entity as no longer needed
 ---@param entity entity
 ---@return void
-function FlagEntityAsNoLongerNeeded(entity)
-    SetEntityAsNoLongerNeeded(entity)
-end
+function FlagEntityAsNoLongerNeeded(entity) SetEntityAsNoLongerNeeded(entity) end
 
 --- assgin value of ActiveSessions to make sure it's always 0 at start of script
 ---@param Event number
@@ -212,9 +352,7 @@ end
 --- Wait Until Events Are Loaded
 ---@param loadingIsDone boolean
 function WaitUntilEventsAreLoaded(loadingIsDone)
-    while loadingIsDone == false or START == false do
-        Citizen.Wait(1)
-    end
+    while loadingIsDone == false or START == false do Citizen.Wait(1) end
 end
 
 -- local CoreName = exports['qb-core']:GetCoreObject()
