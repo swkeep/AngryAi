@@ -1,4 +1,9 @@
-local CoreName = exports['qb-core']:GetCoreObject()
+START = true
+
+-- # TODO Add heli fight
+-- # TODO Add heli fight
+-- # TODO Add heli fight
+-- # TODO Add heli fight
 
 Citizen.CreateThread(function()
     local PlayerId = PlayerId()
@@ -19,7 +24,8 @@ Citizen.CreateThread(function()
         if (sinceHitVehicle <= 250 and sinceHitVehicle ~= -1) then
             local chance = ChanceToTrigger(Config.TriggerAttackOnCarAccident)
             PlayerCoord = GetEntityCoords(PlayerPedId)
-            local vehicle = GetClosestVehicle(PlayerCoord.x, PlayerCoord.y, PlayerCoord.z, 5.0, 0, 70)
+            local vehicle = GetClosestVehicle(PlayerCoord.x, PlayerCoord.y,
+                                              PlayerCoord.z, 5.0, 0, 70)
             VehicleCoord = GetEntityCoords(vehicle)
 
             if NPC_ControlledRecently == false and chance == 1 then
@@ -61,11 +67,12 @@ AddEventHandler('keep-AngryAi:client:spawn', function(model, duration)
     local forward = GetEntityForwardVector(playerPed)
     local x, y, z = table.unpack(coords + forward * 2.0)
 
-
-    local pedsList = {'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01', 'g_f_importexport_01'}
+    local pedsList = {
+        'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01',
+        'g_f_importexport_01'
+    }
     local VehicleName = 'Moonbeam'
     AmbushEvent(coords, duration, pedsList, VehicleName)
-
 
     -- createCrewWithVehicle(model, "Toros", coords)
 
@@ -81,7 +88,14 @@ AddEventHandler('keep-AngryAi:client:spawn', function(model, duration)
     -- )
 end)
 
-function followTargetedPlayer(Attacker, targetPlayer)
-    TaskGotoEntityAiming(Attacker, targetPlayer, 15.0, 5.0)
-end
+RegisterNetEvent('keep-AngryAi:client:Start')
+AddEventHandler('keep-AngryAi:client:Start', function()
+    START = true
+    -- call after player spawned
+end)
 
+function followTargetedPlayer(follower, targetPlayer, distanceToStopAt,
+                              StartAimingDist)
+    TaskGotoEntityAiming(follower, targetPlayer, distanceToStopAt,
+                         StartAimingDist)
+end

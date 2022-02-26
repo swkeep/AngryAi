@@ -11,36 +11,153 @@ Config.DEBUG = true -- make sure it's false
 -- ============================
 --       Client Config
 -- ============================
+Config.TimeInterval = 1000
+
 Config.TriggerAttackOnCarAccident = 100 -- 50% chance to trigger
 Config.DefualtAssignedCooldown = 1000 -- 50% chance to trigger
 
 Config.DefualtExpectedEventDuration = 10000 -- after this duration script will give up on NPCs.
 Config.DefualtExpectedPursueDistance = 75 -- distance until NPCs gaveup on pursue
 
-Config.Events = {{
-    name = 'Ambush',
-    targetPedID = GetPlayerPed(-1),
-    timings = {
-        ActiveDuration = 5000, -- set free enntites after target left for this duration
-        CooldownDruration = 1000, -- cooldown after triggered once
-        ChanceToTrigger = 50, -- 50% after every cooldown
-        maximumActiveSessionsForOnePlayer = 1, -- this should controlled by server
-        ActiveSessions = 0, -- leave as zero -- this should controlled by server
-        AssignedCooldown = 0 -- leave as zero
-    },
-    Function = function()
-        local playerPed = PlayerPedId()
-        local coords = GetEntityCoords(playerPed)
-        local forward = GetEntityForwardVector(playerPed)
-        local x, y, z = table.unpack(coords + forward * 2.0)
+Config.Events = {
+    {
+        name = 'Ambush',
+        timings = {
+            ActiveDuration = 10000, -- set free enntites after target left for this duration
+            CooldownDruration = 2000, -- cooldown after triggered once
+            ChanceToTrigger = 50, -- 50% after every cooldown
+            maximumActiveSessionsForOnePlayer = 0 -- #TODO this should controlled by server
+        },
+        isTargetDead = function()
+            local playerPed = PlayerPedId()
+            return isTargetedPedDead(playerPed)
+        end,
+        Function = function()
+            local playerPed = PlayerPedId()
+            local coords = GetEntityCoords(playerPed)
 
-        local pedsList = {'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01', 'g_f_importexport_01'}
-        local VehicleName = 'Moonbeam'
-        local entities , vehicleRef = AmbushEvent(coords, 'long', pedsList, VehicleName)
-        FlagAsActiveEntities(entities , vehicleRef , GetPlayerPed(-1))
-    end
-}}
+            local pedsList = {
+                'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01',
+                'g_f_importexport_01'
+            }
+            local VehicleName = 'Moonbeam'
 
+            local Coord = getSpawnLocation(coords)
+
+            -- Gets the closest road for vehicles to spawn on
+            local found, outPos, Heading =
+                GetClosestVehicleNodeWithHeading(Coord.x, Coord.y, Coord.z, 1.0,
+                                                 1, false)
+
+            if found then
+                local entities, vehicleRef
+                entities, vehicleRef = SpawnVehicleWithPedInside(pedsList,
+                                                                 VehicleName,
+                                                                 outPos, Heading)
+                -- pedRef[1] is first npc in car 
+                DriveToGoal(entities[1], vehicleRef, coords, 'Moonbeam')
+                -- giveWeaponToCrew(entities, 'weapon_smg')
+                -- CrewAttackTargetedPed(entities, playerPed)
+                -- # TODO qbtarget sup for vehicles ????????
+                -- InitQbTargetForEntity(vehicleRef)
+                return entities, vehicleRef, playerPed
+            end
+        end
+    }, {
+        name = 'SeekPlayer',
+        timings = {
+            ActiveDuration = 50000, -- event and npcs are active until this value reach zero 
+            CooldownDruration = 5000, -- cooldown after triggered once
+            ChanceToTrigger = 100, -- 50% after every cooldown
+            maximumActiveSessionsForOnePlayer = 1 -- this should controlled by server
+        },
+        isTargetDead = function()
+            local playerPed = PlayerPedId()
+            return isTargetedPedDead(playerPed)
+        end,
+        customDistance = function(distance, ped, info)
+            if distance <= 5 then
+                ChatWithTarget(ped, GetPlayerPed(-1))
+                PlayPedAmbientSpeechNative(ped, 'GENERIC_HI',
+                                           'Speech_Params_Allow_Repeat')
+            end
+        end,
+        Function = function()
+            local playerPed = PlayerPedId()
+            local coords = GetEntityCoords(playerPed)
+            local x, y, z = table.unpack(getSpawnLocation(coords))
+
+            local pedHash = GetHashKey('S_M_M_HighSec_05')
+
+            WaitUntilModelLoaded(pedHash)
+            local ped = CreatePed(2, pedHash, x, y, z, 0, true, false)
+            SetPedAudioGender(ped, true)
+            GivePedRandomVoice(ped, 'MALE', 'LATINO') -- set voice for ped!
+            followTargetedPlayer(ped, playerPed, 3.0, 5.0)
+
+            -- TaskLookAtEntity(ped, playerPed, 60.0, 2048, 3)
+
+            InitQbTargetForEntity(ped)
+            return {ped}, nil, playerPed
+        end
+    }, {
+        name = 'SeekPlayer2',
+        timings = {
+            ActiveDuration = 5000, -- set free enntites after target left for this duration
+            CooldownDruration = 2000, -- cooldown after triggered once
+            ChanceToTrigger = 100, -- 50% after every cooldown
+            maximumActiveSessionsForOnePlayer = 0 -- this should controlled by server
+        },
+        isTargetDead = function()
+            local playerPed = PlayerPedId()
+            return isTargetedPedDead(playerPed)
+        end,
+        Function = function()
+            local playerPed = PlayerPedId()
+            local coords = GetEntityCoords(playerPed)
+            local x, y, z = table.unpack(getSpawnLocation(coords))
+
+            local pedHash = GetHashKey('S_M_M_HighSec_05')
+
+            WaitUntilModelLoaded(pedHash)
+            local ped = CreatePed(2, pedHash, x, y, z, 0, true, false)
+            followTargetedPlayer(ped, playerPed, 3.0, 5.0)
+
+            -- TaskLookAtEntity(ped, playerPed, 60.0, 2048, 3)
+
+            InitQbTargetForEntity(ped)
+            return ped, nil, playerPed
+        end
+    }
+}
+
+function InitQbTargetForEntity(Entity)
+    exports['qb-target']:AddTargetEntity(Entity, {
+        options = {
+            {
+                type = "client",
+                event = "postop:getPackage",
+                icon = "fas fa-box-circle-check",
+                label = "Get Package",
+                action = function(entity)
+                    if IsPedAPlayer(entity) then return false end
+                    -- PlayPedAmbientSpeechNative(entity , 'GENERIC_HI'  , 'SPEECH_PARAMS_FORCE'  )
+                    PlayPedAmbientSpeechNative(entity, 'GENERIC_THANKS',
+                                               'SPEECH_PARAMS_FORCE')
+                    TriggerServerEvent('AngryAi:server:sellPackage')
+                    RelaseThisEntityNow(entity)
+                end,
+                canInteract = function(entity, distance, data)
+                    if IsPedAPlayer(entity) or IsEntityDead(entity) == 1 then
+                        return false
+                    end
+                    return true
+                end
+            }
+        },
+        distance = 3.0
+    })
+end
 -- ============================
 --       FIRING_PATTERN_BURST
 -- ============================
