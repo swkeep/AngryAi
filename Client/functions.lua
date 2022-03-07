@@ -1,4 +1,7 @@
---- get safe coord for spawn around given coord 
+-- ================================
+--          Utilities
+-- ================================
+--- get safe coord to around given coord
 ---@param coord 'vector3'
 ---@return 'vector3'
 function getSpawnLocation(coord)
@@ -24,76 +27,27 @@ function getSpawnLocation(coord)
     return vector3(posX, posY, posZ)
 end
 
---- spwan one vehicle with given models for peds
----@param pedmodels 'models table'
----@param vehiclemodel 'model'
----@param spwanCoord number
----@param heading number
----@return 'pedsRef , vehicleRef'
-function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading)
-    -- Load the models to spawn
-    local vehiclemodel = GetHashKey(vehiclemodel)
-    local pedsRef = {}
-
-    -- while loops to ensure the models are actually loaded
-    WaitUntilModelLoaded(vehiclemodel)
-    -- Create vehicle + ped
-    local pedveh = CreateVehicle(vehiclemodel, spwanCoord.x, spwanCoord.y,
-                                 spwanCoord.z, heading, true, false)
-
-    for key, pedModel in pairs(pedmodels) do
-        local tempPedHash = GetHashKey(pedModel)
-        WaitUntilModelLoaded(tempPedHash)
-        local temp_ped = CreatePedInsideVehicle(pedveh, 2, tempPedHash,
-                                                (key - 2), true, true)
-        SetBlockingOfNonTemporaryEvents(temp_ped, true)
-        table.insert(pedsRef, temp_ped)
-    end
-
-    SetVehicleFixed(pedveh)
-    SetVehicleOnGroundProperly(pedveh)
-    return pedsRef, pedveh
+--- wait for model to load
+---@param model 'model'
+function WaitUntilModelLoaded(model)
+    if not model then return end
+    RequestModel(model)
+    while not HasModelLoaded(model) do Citizen.Wait(1) end
 end
 
---- ped will change their positions toward target and they will walk!
----@param ped 'ped'
----@param target 'ped'
-function ChatWithTarget(ped, target)
-    TaskChatToPed(ped, target, 17, 0.0, 0.0, 0.0, 0.0, 0.0)
+--- it will return 1 or 2 , 1 is the value we should look for!
+---@param chance number
+function ChanceToTrigger(chance)
+    if not chance then return end
+    local sample
+    local temp = {chance, (100 - chance)}
+    sample = Alias_table_wrapper(temp)
+    return sample
 end
 
---- if ped is in vehicle they gonna move toward given goal
----@param ped 'ped'
----@param pedVehicle 'ped'
----@param goal 'coord'
----@param vehHash 'hash'
-function DriveToGoal(ped, pedVehicle, goal, vehHash)
-    -- Let the car move
-    TaskVehicleDriveToCoord(ped, pedVehicle, goal.x, goal.y, goal.z, 50.0, 0,
-                            vehHash, 1074528293, 5.0, true)
-end
-
---- group of peds to seek and attack one ped
----@param attackersListByReference table
----@param targetPed 'ped'
-function CrewAttackTargetedPed(attackersListByReference, targetPed)
-    for key, ped in pairs(attackersListByReference) do
-        AttackTargetedPed(ped, targetPed)
-        SetRelationshipBetweenPed(ped)
-    end
-end
-
---- gives ped ability to follow and attack targeted ped
----@param AttackerPed 'ped'
----@param targetPed 'ped'
----@return 'void'
-function AttackTargetedPed(AttackerPed, targetPed)
-    if not AttackerPed and not targetPed then return end
-    SetPedCombatAttributes(AttackerPed, 46, 1)
-    TaskGoToEntityWhileAimingAtEntity(AttackerPed, targetPed, targetPed, 1, 1,
-                                      0, 15, 1, 1, 1566631136)
-    TaskCombatPed(AttackerPed, targetPed, 0, 16)
-end
+-- =================================
+--       Peds Behavior!
+-- =================================
 
 --- remove Relationship againt player.
 ---@param ped 'ped'
@@ -106,45 +60,10 @@ end
 ---@param ped 'ped'
 function SetRelationshipBetweenPed(ped)
     if not ped then return end
-    -- note: if we don't do this they will fight between themselfs!
+    -- note: if we don't do this they will star fighting among themselves!
     RemovePedFromGroup(ped)
     SetPedRelationshipGroupHash(ped, GetHashKey('HATES_PLAYER'))
     SetCanAttackFriendly(ped, false, false)
-end
-
---- give one type of weapon to group of peds 
----@param list table
----@param weaponName string
-function giveWeaponToCrew(list, weaponName)
-    for key, ped in pairs(list) do giveWeaponToPed(ped, weaponName) end
-end
-
---- five weapon to ped
----@param ped any
----@param weaponName string
----@return 'void'
-function giveWeaponToPed(ped, weaponName)
-    if not ped and not weaponName then return end
-    GiveWeaponToPed(ped, GetHashKey(weaponName), 1, false, false)
-end
-
---- wait for model to load
----@param model 'model'
-function WaitUntilModelLoaded(model)
-    if not model then return end
-    RequestModel(model)
-    while not HasModelLoaded(model) do Citizen.Wait(1) end
-end
-
---- it will return 1 or 2 , 1 is what we should aim for
----@param chance number
-function ChanceToTrigger(chance)
-    -- here we Complete the rest Chances to reach 100% in total in every try and then make EarnedLoot table
-    if not chance then return end
-    local sample
-    local temp = {chance, (100 - chance)}
-    sample = Alias_table_wrapper(temp)
-    return sample
 end
 
 ---give ped a randowm voice by gender and origin
@@ -153,6 +72,7 @@ end
 ---@param origin string
 ---@return boolean
 function GivePedRandomVoice(ped, gender, origin)
+    -- @swkeep
     local speech = {
         FEMALE = {
             BLACK = {
@@ -472,37 +392,94 @@ function GivePedRandomVoice(ped, gender, origin)
     return true
 end
 
--- function ActivateWarpInTouch()
---     -- fun warping :)
---     Citizen.CreateThread(function()
---         local PlayerId = PlayerId()
---         local PlayerPedId = PlayerPedId()
---         local PlayerCoord
---         local Warped = false
---         local since
---         while true do
---             Wait(500)
---             since = GetTimeSincePlayerHitVehicle(PlayerId)
---             if since <= 200 then
---                 PlayerCoord = GetEntityCoords(PlayerPedId)
---                 local vehicle = GetClosestVehicle(PlayerCoord.x, PlayerCoord.y,
---                                                   PlayerCoord.z, 4.0, 0, 70)
---                 if Warped == false then
---                     Warped = true
---                     TaskWarpPedIntoVehicle(PlayerPedId, vehicle, -1)
---                     Wait(500)
---                     -- local temp_ped = CreatePedInsideVehicle(vehicle, 2, GetHashKey('g_m_y_mexgoon_03'), 0, true, true)
---                     -- giveWeaponToPed(temp_ped, 'weapon_smg')
---                     -- AttackTargetedPed(temp_ped, PlayerId)
---                 end
---             end
---             Warped = false
---         end
---     end)
--- end
+-- =======================================
+--       Peds Physical Actions!
+-- =======================================
 
--- male : A_M_M_POLYNESIAN_01_POLYNESIAN_FULL_01
--- A_M_M_POLYNESIAN_01_POLYNESIAN_MINI_01
--- A_M_Y_POLYNESIAN_01_POLYNESIAN_FULL_01 
--- AIRCRAFT_WARNING_FEMALE_01
--- AIRCRAFT_WARNING_MALE_01
+--- spwan one vehicle with given models for peds
+---@param pedmodels 'models table'
+---@param vehiclemodel 'model'
+---@param spwanCoord number
+---@param heading number
+---@return 'pedsRef , vehicleRef'
+function SpawnVehicleWithPedInside(pedmodels, vehiclemodel, spwanCoord, heading)
+    -- Load the models to spawn
+    local vehiclemodel = GetHashKey(vehiclemodel)
+    local pedsRef = {}
+
+    -- while loops to ensure the models are actually loaded
+    WaitUntilModelLoaded(vehiclemodel)
+    -- Create vehicle + ped
+    local pedveh = CreateVehicle(vehiclemodel, spwanCoord.x, spwanCoord.y,
+                                 spwanCoord.z, heading, true, false)
+
+    for key, pedModel in pairs(pedmodels) do
+        local tempPedHash = GetHashKey(pedModel)
+        WaitUntilModelLoaded(tempPedHash)
+        local temp_ped = CreatePedInsideVehicle(pedveh, 2, tempPedHash,
+                                                (key - 2), true, true)
+        SetBlockingOfNonTemporaryEvents(temp_ped, true)
+        table.insert(pedsRef, temp_ped)
+    end
+
+    SetVehicleFixed(pedveh)
+    SetVehicleOnGroundProperly(pedveh)
+    return pedsRef, pedveh
+end
+
+--- ped will walk toward target
+---@param ped 'ped'
+---@param target 'ped/entity'
+function WalkTowardTarget(ped, target)
+    TaskChatToPed(ped, target, 17, 0.0, 0.0, 0.0, 0.0, 0.0)
+end
+
+--- if ped is in driver seat he/she will try to reach given goal.
+---@param ped 'ped'
+---@param pedVehicle 'ped'
+---@param goal 'coord'
+---@param vehHash 'hash'
+function DriveToGoal(ped, pedVehicle, goal, vehHash)
+    -- Let the car move
+    -- note: in my tests driver only moves inside road and can't go offroad!
+    TaskVehicleDriveToCoord(ped, pedVehicle, goal.x, goal.y, goal.z, 50.0, 0,
+                            vehHash, 1074528293, 5.0, true)
+end
+
+--- perform AttackTargetedPed() on a table of peds
+---@param attackersListByReference table
+---@param targetPed 'ped'
+function CrewAttackTargetedPed(attackersListByReference, targetPed)
+    for key, ped in pairs(attackersListByReference) do
+        AttackTargetedPed(ped, targetPed)
+        SetRelationshipBetweenPed(ped)
+    end
+end
+
+--- gives ped ability to follow and attack targeted ped
+---@param AttackerPed 'ped'
+---@param targetPed 'ped'
+---@return 'void'
+function AttackTargetedPed(AttackerPed, targetPed)
+    if not AttackerPed and not targetPed then return end
+    SetPedCombatAttributes(AttackerPed, 46, 1)
+    TaskGoToEntityWhileAimingAtEntity(AttackerPed, targetPed, targetPed, 1, 1,
+                                      0, 15, 1, 1, 1566631136)
+    TaskCombatPed(AttackerPed, targetPed, 0, 16)
+end
+
+--- give one type of weapon to table of peds 
+---@param list table
+---@param weaponName string
+function giveWeaponToCrew(list, weaponName)
+    for key, ped in pairs(list) do giveWeaponToPed(ped, weaponName) end
+end
+
+--- give weapon to ped
+---@param ped any
+---@param weaponName string
+---@return 'void'
+function giveWeaponToPed(ped, weaponName)
+    if not ped and not weaponName then return end
+    GiveWeaponToPed(ped, GetHashKey(weaponName), 1, false, false)
+end
