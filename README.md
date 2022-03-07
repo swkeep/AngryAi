@@ -1,5 +1,9 @@
 # AngryAi
+Bunch of predefined NPC behavior functions and npc/event management system
 
+** 
+
+It's not optimized by any mean. i made it to just test somethings in my server.
 event template
 
 ```lua
