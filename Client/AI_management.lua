@@ -1,21 +1,18 @@
 local interval = Config.TimeInterval
 local loadingIsDone = false
 --  Ai management
--- #TODO Polyzone spawn zone
--- #TODO pause - resume functinos 
--- #TODO seek new target in area
--- #TODO Trigger with external event
--- #TODO trigger with polyzone
--- #TODO static spawn position (polyzone maybe)
--- #TODO timed events (night / day)
+-- #TODO max npc spawn per area?! maybe?!
+
 --
-local NPC_RelaseQueue = {}
--- Ped Class
-NPC = {peds = {}}
+NPC = {
+    peds = {}
+}
+EVENT = {
+    events = {}
+}
 function NPC:addPed(entity, vehicleRef, targetedPed, eventIndex)
     local entityData = {}
-    local eventDuration = EVENT:readEvent(eventIndex).timings
-                              .activeEventDuration or nil
+    local eventDuration = EVENT:readEvent(eventIndex).timings.activeEventDuration or nil
 
     entityData[entity] = {
         type = GetEntityType(entity),
@@ -23,18 +20,24 @@ function NPC:addPed(entity, vehicleRef, targetedPed, eventIndex)
         targetedPed = targetedPed,
         eventIndex = eventIndex
     }
-    if vehicleRef ~= nil then entityData[entity].vehicle = vehicleRef end
-    if self.peds[eventIndex] == nil then self.peds[eventIndex] = {} end
+    if vehicleRef ~= nil then
+        entityData[entity].vehicle = vehicleRef
+    end
+    if self.peds[eventIndex] == nil then
+        self.peds[eventIndex] = {}
+    end
     if self.peds[eventIndex][entity] == nil then
         self.peds[eventIndex][entity] = {}
     end
     self.peds[eventIndex][entity] = entityData[entity]
 end
-function NPC:removePed(entity, eventIndex) self.peds[eventIndex][entity] = nil end
-function NPC:readPed(entity, eventIndex) return self.peds[eventIndex][entity] end
-function NPC:getSize() print_table(self.peds) end
+function NPC:removePed(entity, eventIndex)
+    self.peds[eventIndex][entity] = nil
+end
+function NPC:readPed(entity, eventIndex)
+    return self.peds[eventIndex][entity]
+end
 
-EVENT = {events = {}}
 function EVENT:addEvent(event)
     local eventData = {}
     eventData = {
@@ -69,11 +72,21 @@ function EVENT:manageActiveSessions(eventIndex, _type)
         table.remove(array, #array)
     end
 end
-function EVENT:removeEvent(eventIndex) self.events[eventIndex] = nil end
-function EVENT:readEvent(eventIndex) return self.events[eventIndex] end
-function EVENT:readEvent(eventIndex) return self.events[eventIndex] end
-function EVENT:readAll() return self.events end
-function EVENT:getSize() return #self.events end
+function EVENT:removeEvent(eventIndex)
+    self.events[eventIndex] = nil
+end
+function EVENT:readEvent(eventIndex)
+    return self.events[eventIndex]
+end
+function EVENT:readEvent(eventIndex)
+    return self.events[eventIndex]
+end
+function EVENT:readAll()
+    return self.events
+end
+function EVENT:getSize()
+    return #self.events
+end
 function EVENT:manangeCooldown(eventIndex, _type)
     local defaultCooldown = self.events[eventIndex].timings.spawnCooldown -- number
     local currentCooldowns = self.events[eventIndex].currentCooldowns -- table
@@ -90,6 +103,8 @@ function EVENT:manangeCooldown(eventIndex, _type)
         end
     end
 end
+
+local NPC_RelaseQueue = {}
 -- 
 
 -- event loader
@@ -110,7 +125,9 @@ end)
 --- contains all error messages 
 ---@param errorNumber integer
 function Loading_ErrorHandler(errorNumber)
-    local error = {[1] = 'script cant spawn faster than its interval'}
+    local error = {
+        [1] = 'script cant spawn faster than its interval'
+    }
     print('failed to load: ', error[errorNumber])
 end
 
@@ -124,22 +141,22 @@ Citizen.CreateThread(function()
                 -- force remove entities
                 if next(NPC_RelaseQueue) ~= nil then
                     RelaseEntityLogic(NPC_RelaseQueue, ped, event)
-                else
-                    -- -- -- giveup on target death
-                    KeepTrackOfTragetDeath(event, ped)
-
-                    -- -- -- keep track of death and entity existence
-                    KeepTrackOfEntityDeath(event, ped)
-                    KeepTackOfEntityExistence(event, ped)
-
-                    -- -- -- keep track of Events duration Event.timings.ActiveDuration
-                    EventDurationTracker(info, ped)
-
-                    -- -- -- keep track of distance
-                    -- TrackEventNpcDistance(GetDistanceBetweenTwoEntities(ped,
-                    --                                                     info.targetedPed),
-                    --                       ped, event)
+                    goto skip
                 end
+                -- track target death logic
+                KeepTrackOfTragetDeath(event, ped) --
+
+                -- keep track of npc death and existence
+                KeepTrackOfEntityDeath(event, ped) --
+                KeepTackOfEntityExistence(event, ped) --
+
+                -- keep track of Events duration Event.timings.ActiveDuration
+
+                EventDurationTracker(event, ped)
+
+                -- keep track of distance
+                TrackEventNpcDistanceToTarget(event, ped)
+                ::skip::
             end
         end
     end
@@ -153,7 +170,9 @@ Citizen.CreateThread(function()
     local events = EVENT:readAll()
     for key, Event in pairs(events) do
         -- save zoneRef in Zones
-        if Event.Zone ~= nil then Zones[key] = Event.Zone() end
+        if Event.Zone ~= nil then
+            Zones[key] = Event.Zone()
+        end
     end
     while true do
         Wait(interval)
@@ -177,18 +196,15 @@ Citizen.CreateThread(function()
 
                 -- check if we have need to be in a zone!?
                 if Zones[key] ~= nil then
-                    insideZone = Zones[key]:isPointInside(GetEntityCoords(
-                                                              PlayerPedId()))
+                    insideZone = Zones[key]:isPointInside(GetEntityCoords(PlayerPedId()))
                 else
                     insideZone = true
                 end
 
-                if insideZone and SessionTrigger and not cooldownTrigger and
-                    customDeathFunction == false and chance == 1 then
-                    TriggerServerEvent("AngryAi:server:zoneManagementService")
-                    print('event ' .. Event.name .. ' is triggered')
+                if insideZone and SessionTrigger and not cooldownTrigger and not customDeathFunction and chance == 1 then
+                    print('event ' .. Event.name .. ' triggered')
                     local ped, veh, target = Event['eventBehavior']()
-                    FlagAsActiveEntities(ped, veh, target, Event, key)
+                    ActivateAIManagement(ped, veh, target, Event, key)
                     EVENT:manageActiveSessions(key, 'increment')
                     EVENT:manangeCooldown(key, 'addCooldown')
                 end
@@ -201,7 +217,9 @@ end)
 function isEventStillOnCooldown(event)
     local tmp = {}
     for key, cooldown in pairs(event.currentCooldowns) do
-        if cooldown == 0 then table.insert(tmp, 1) end
+        if cooldown == 0 then
+            table.insert(tmp, 1)
+        end
     end
     return not (#tmp == #event.currentCooldowns)
 end
@@ -210,11 +228,31 @@ end
 ---@param event 'event'
 ---@param ped 'ped'
 function EventDurationTracker(event, ped)
-    -- #TODO fix
-    if event.duration ~= 0 then
-        event.duration = event.duration - 1000
-    elseif event.duration == 0 then
+    local pedMetaData = NPC:readPed(ped, event.eventKey)
+    if pedMetaData ~= nil and pedMetaData.duration ~= 0 then
+        pedMetaData.duration = pedMetaData.duration - 1000
+    elseif pedMetaData ~= nil and pedMetaData.duration == 0 then
         RelaseThisEntityNow(ped)
+    end
+end
+
+--- excute custom distance function or run defalut function
+---@param ped 'ped'
+---@param event 'event'
+function TrackEventNpcDistanceToTarget(event, ped)
+    local pedMetaData = NPC:readPed(ped, event.eventKey)
+    if pedMetaData ~= nil then
+        local distance = GetDistanceBetweenTwoEntities(ped, pedMetaData.targetedPed)
+        if event.customDistance ~= nil and type(event.customDistance) == "function" then
+            -- run customDistance if we have it in config file if not used default function
+            event.customDistance(distance, ped, event)
+            return
+        end
+        if distance > 130 then
+            SetEntityAsNoLongerNeeded(ped)
+            EVENT:manageActiveSessions(event.eventKey, 'decrement')
+            NPC:removePed(ped, event.eventKey)
+        end
     end
 end
 
@@ -223,8 +261,7 @@ end
 ---@return boolean
 function canWeCreateMoreEventOfThisType(currenEventData)
     -- compare current active Sessions to maxSessions in config file
-    if currenEventData.timings.maxSessions -
-        #currenEventData.currentActiveSessions > 0 then
+    if currenEventData.timings.maxSessions - #currenEventData.currentActiveSessions > 0 then
         return true
     else
         return false
@@ -236,7 +273,7 @@ end
 ---@param ped 'ped'
 function KeepTackOfEntityExistence(event, ped)
     if DoesEntityExist(ped) == false then
-        FlagEntityAsNoLongerNeeded(ped)
+        SetEntityAsNoLongerNeeded(ped)
         EVENT:manageActiveSessions(event['eventKey'], 'decrement')
         NPC:removePed(ped, event['eventKey'])
     end
@@ -248,7 +285,7 @@ end
 function KeepTrackOfEntityDeath(event, ped)
     -- #TODO when we spawn more than one entiry this will remove one event per entity so add more to events!?
     if IsEntityDead(ped) == 1 then
-        FlagEntityAsNoLongerNeeded(ped)
+        SetEntityAsNoLongerNeeded(ped)
         EVENT:manageActiveSessions(event['eventKey'], 'decrement')
         NPC:removePed(ped, event['eventKey'])
     end
@@ -264,34 +301,13 @@ function KeepTrackOfTragetDeath(event, ped)
     else
         customDeathFunction = isTargetedPedDead(PlayerPedId())
     end
-    print(customDeathFunction)
     if customDeathFunction == true then
         ClearPedTasks(ped)
-        leaveArea(ped, event)
+        LeaveArea(ped, event)
         EVENT:manageActiveSessions(event['eventKey'], 'decrement')
         NPC:removePed(ped, event['eventKey'])
     end
     -- SetEntityHealth(ped, 0) --kill ped when it's done
-end
-
---- excute custom distance function or run defalut function
----@param distance number
----@param ped 'ped'
----@param event 'event'
-function TrackEventNpcDistance(distance, ped, event)
-    if type(event['customDistance']) == "function" then
-        -- run customDistance if we have it in config file if not used default function
-        event['customDistance'](distance, ped, event)
-        return
-    end
-    if distance <= 5 then
-        PlayPedAmbientSpeechNative(ped, 'GENERIC_HI',
-                                   'Speech_Params_Allow_Repeat')
-    elseif distance > 130 then
-        FlagEntityAsNoLongerNeeded(ped)
-        EVENT:manageActiveSessions(event['eventKey'], 'decrement')
-        NPC:removePed(ped, event['eventKey'])
-    end
 end
 
 ---logic of how we relase npcs from script
@@ -304,7 +320,7 @@ function RelaseEntityLogic(NPC_RelaseQueue, ped, event)
         if type == 1 then
             if ped == RelaseEntity then
                 ClearPedTasks(RelaseEntity)
-                FlagEntityAsNoLongerNeeded(RelaseEntity)
+                SetEntityAsNoLongerNeeded(RelaseEntity)
                 EVENT:manageActiveSessions(event['eventKey'], 'decrement')
                 NPC:removePed(RelaseEntity, event['eventKey'])
                 NPC_RelaseQueue[key] = nil
@@ -315,14 +331,14 @@ function RelaseEntityLogic(NPC_RelaseQueue, ped, event)
             -- for i = -1, maxSeat, 1 do
             --     local ped = GetPedInVehicleSeat(RelaseEntity, i)
             --     ClearPedTasks(ped)
-            --     leaveArea(ped, {
+            --     LeaveArea(ped, {
             --         vehicle = {
             --             vehicleRef = RelaseEntity,
             --             seatIndex = i
             --         }
             --     })
             --     if i == maxSeat then
-            --         FlagEntityAsNoLongerNeeded(RelaseEntity)
+            --         SetEntityAsNoLongerNeeded(RelaseEntity)
             --          EVENT:manageActiveSessions(info.event , 'decrement')
 
             --         goto continue
@@ -335,21 +351,22 @@ end
 
 --- add 'Entity' to NPC_RelaseQueue: script will remove this 'Entity' from its peds pool
 ---@param entity any
-function RelaseThisEntityNow(entity) table.insert(NPC_RelaseQueue, entity) end
+function RelaseThisEntityNow(entity)
+    table.insert(NPC_RelaseQueue, entity)
+end
 
---- peds or ped will seek vehicle and after that leave area
+--- peds or ped will find their vehicle and then leave area
 ---@param ped 'ped'
 ---@param event 'event'
-function leaveArea(ped, event)
-    if event['vehicle'] ~= nil then
-        TaskEnterVehicle(ped, event['vehicle'], 10.0, info.vehicle.seatIndex,
-                         2.0, 1, 0)
-        if info.vehicle.seatIndex == -1 then
-            TaskVehicleDriveWander(ped, info.vehicle.vehicleRef, 60.0,
-                                   1074528293)
+function LeaveArea(ped, event)
+    local pedMetaData = NPC:readPed(ped, event['eventKey'])
+    if pedMetaData.vehicle ~= nil then
+        TaskEnterVehicle(ped, pedMetaData.vehicle.vehicleRef, 10.0, pedMetaData.vehicle.seatIndex, 2.0, 1, 0)
+        if pedMetaData.vehicle.seatIndex == -1 then
+            TaskVehicleDriveWander(ped, pedMetaData.vehicle.vehicleRef, 60.0, 1074528293)
         end
     end
-    FlagEntityAsNoLongerNeeded(ped)
+    SetEntityAsNoLongerNeeded(ped)
 end
 
 --- pass entities/entity control to scirpt 
@@ -358,7 +375,7 @@ end
 ---@param targetedPed 'ped'
 ---@param event 'Event'
 ---@param eventKey 'Event index'
-function FlagAsActiveEntities(entities, vehicleRef, targetedPed, event, eventKey)
+function ActivateAIManagement(entities, vehicleRef, targetedPed, event, eventKey)
     -- create data struct needed for tracking entities
     local tmpVehRef = nil
     local tmpEvent = event
@@ -368,14 +385,20 @@ function FlagAsActiveEntities(entities, vehicleRef, targetedPed, event, eventKey
         for key, entity in pairs(entities) do
             if vehicleRef ~= nil then
                 tmpVehRef = {}
-                tmpVehRef = {vehicleRef = vehicleRef, seatIndex = (key - 2)}
+                tmpVehRef = {
+                    vehicleRef = vehicleRef,
+                    seatIndex = (key - 2)
+                }
             end
             NPC:addPed(entity, tmpVehRef, targetedPed, eventKey)
         end
     elseif type(entities) == "number" then
         if vehicleRef ~= nil then
             tmpVehRef = {}
-            tmpVehRef = {vehicleRef = vehicleRef, seatIndex = -1}
+            tmpVehRef = {
+                vehicleRef = vehicleRef,
+                seatIndex = -1
+            }
         end
         NPC:addPed(entities, tmpVehRef, targetedPed, eventKey)
     end
@@ -403,24 +426,23 @@ end
 --- is Targeted Ped Dead?
 ---@param target 'ped'
 function isTargetedPedDead(target)
-    local state = {
-        IsPedDeadOrDying(target, 1), IsPlayerDead(target), IsEntityDead(target),
-        IsEntityPlayingAnim(target, 'dead', 'dead_a', 3),
-        IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)
-    }
+    local state = {IsPedDeadOrDying(target, 1), IsPlayerDead(target), IsEntityDead(target),
+                   IsEntityPlayingAnim(target, 'dead', 'dead_a', 3),
+                   IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)}
     -- IsEntityPlayingAnim(target, 'dead', 'dead_a', 3) or IsEntityPlayingAnim(target, 'combat@damage@writhe', 'writhe_loop', 3)
     -- these are needed when player's ped is playing bleeding animation
-    for key, value in pairs(state) do if value == 1 then return true end end
+    for key, value in pairs(state) do
+        if value == 1 then
+            return true
+        end
+    end
     return false
 end
-
---- Ask game engine to flag entity as no longer needed
----@param entity 'entity'
----@return 'void'
-function FlagEntityAsNoLongerNeeded(entity) SetEntityAsNoLongerNeeded(entity) end
 
 --- Wait Until Events Are Loaded
 ---@param loadingIsDone boolean
 function WaitUntilEventsAreLoaded(loadingIsDone)
-    while loadingIsDone == false or START == false do Citizen.Wait(1) end
+    while loadingIsDone == false or START == false do
+        Citizen.Wait(1)
+    end
 end
