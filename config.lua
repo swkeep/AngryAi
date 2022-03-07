@@ -6,18 +6,10 @@ Config.DEBUG = true -- make sure it's false
 --       Server Config
 -- ============================
 
--- g_f_y_vagos_01
-
 -- ============================
 --       Client Config
 -- ============================
 Config.TimeInterval = 1000
-
-Config.TriggerAttackOnCarAccident = 100 -- 50% chance to trigger
-Config.DefualtAssignedCooldown = 1000 -- 50% chance to trigger
-
-Config.DefualtExpectedEventDuration = 10000 -- after this duration script will give up on NPCs.
-Config.DefualtExpectedPursueDistance = 75 -- distance until NPCs gaveup on pursue
 
 Config.Events = {
     {
@@ -88,8 +80,6 @@ Config.Events = {
             GivePedRandomVoice(ped, 'MALE', 'LATINO') -- set voice for ped!
             followTargetedPlayer(ped, playerPed, 3.0, 5.0)
 
-            -- TaskLookAtEntity(ped, playerPed, 60.0, 2048, 3)
-
             InitQbTargetForEntity(ped)
             return ped, nil, playerPed
         end
@@ -115,9 +105,6 @@ Config.Events = {
             WaitUntilModelLoaded(pedHash)
             local ped = CreatePed(2, pedHash, x, y, z, 0, true, false)
             followTargetedPlayer(ped, playerPed, 3.0, 5.0)
-
-            -- TaskLookAtEntity(ped, playerPed, 60.0, 2048, 3)
-
             InitQbTargetForEntity(ped)
             return ped, nil, playerPed
         end
@@ -259,23 +246,3 @@ function InitQbTargetForEntity(Entity)
         distance = 3.0
     })
 end
--- ============================
---       FIRING_PATTERN_BURST
--- ============================
-
--- FIRING_PATTERN_BURST_FIRE = 0xD6FF6D61 ( 1073727030 )  
--- FIRING_PATTERN_BURST_FIRE_IN_COVER = 0x026321F1 ( 40051185 )  
--- FIRING_PATTERN_BURST_FIRE_DRIVEBY = 0xD31265F2 ( -753768974 )  
--- FIRING_PATTERN_FROM_GROUND = 0x2264E5D6 ( 577037782 )  
--- FIRING_PATTERN_DELAY_FIRE_BY_ONE_SEC = 0x7A845691 ( 2055493265 )  
--- FIRING_PATTERN_FULL_AUTO = 0xC6EE6B4C ( -957453492 )  
--- FIRING_PATTERN_SINGLE_SHOT = 0x5D60E4E0 ( 1566631136 )  
--- FIRING_PATTERN_BURST_FIRE_PISTOL = 0xA018DB8A ( -1608983670 )  
--- FIRING_PATTERN_BURST_FIRE_SMG = 0xD10DADEE ( 1863348768 )  
--- FIRING_PATTERN_BURST_FIRE_RIFLE = 0x9C74B406 ( -1670073338 )  
--- FIRING_PATTERN_BURST_FIRE_MG = 0xB573C5B4 ( -1250703948 )  
--- FIRING_PATTERN_BURST_FIRE_PUMPSHOTGUN = 0x00BAC39B ( 12239771 )  
--- FIRING_PATTERN_BURST_FIRE_HELI = 0x914E786F ( -1857128337 )  
--- FIRING_PATTERN_BURST_FIRE_MICRO = 0x42EF03FD ( 1122960381 )  
--- FIRING_PATTERN_SHORT_BURSTS = 0x1A92D7DF ( 445831135 )  
--- FIRING_PATTERN_SLOW_FIRE_TANK = 0xE2CA3A71 ( -490063247 )  
