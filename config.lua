@@ -23,32 +23,25 @@ Config.Events = {
     {
         name = 'Ambush',
         timings = {
-            ActiveDuration = 10000, -- set free enntites after target left for this duration
-            CooldownDruration = 2000, -- cooldown after triggered once
-            ChanceToTrigger = 50, -- 50% after every cooldown
-            maximumActiveSessionsForOnePlayer = 0 -- #TODO this should controlled by server
+            activeEventDuration = 50000, -- set free enntites after target left for this duration
+            spawnCooldown = 5000, -- after we trigger this event once it's goes on cooldown
+            chanceToTrigger = 100, -- 50% after every cooldown
+            maxSessions = 0 -- #TODO this should controlled by server
         },
         isTargetDead = function()
             local playerPed = PlayerPedId()
             return isTargetedPedDead(playerPed)
         end,
-        Function = function()
+        eventBehavior = function()
             local playerPed = PlayerPedId()
             local coords = GetEntityCoords(playerPed)
-
-            local pedsList = {
-                'g_m_y_mexgoon_01', 'g_m_y_mexgoon_03', 'g_f_y_vagos_01',
-                'g_f_importexport_01'
-            }
+            local pedsList = {'g_m_y_mexgoon_01', 'g_f_y_vagos_01'}
             local VehicleName = 'Moonbeam'
-
             local Coord = getSpawnLocation(coords)
-
             -- Gets the closest road for vehicles to spawn on
             local found, outPos, Heading =
                 GetClosestVehicleNodeWithHeading(Coord.x, Coord.y, Coord.z, 1.0,
                                                  1, false)
-
             if found then
                 local entities, vehicleRef
                 entities, vehicleRef = SpawnVehicleWithPedInside(pedsList,
@@ -66,10 +59,10 @@ Config.Events = {
     }, {
         name = 'SeekPlayer',
         timings = {
-            ActiveDuration = 50000, -- event and npcs are active until this value reach zero 
-            CooldownDruration = 5000, -- cooldown after triggered once
-            ChanceToTrigger = 100, -- 50% after every cooldown
-            maximumActiveSessionsForOnePlayer = 1 -- this should controlled by server
+            activeEventDuration = 60000,
+            spawnCooldown = 2000,
+            chanceToTrigger = 50,
+            maxSessions = 0
         },
         isTargetDead = function()
             local playerPed = PlayerPedId()
@@ -82,7 +75,7 @@ Config.Events = {
                                            'Speech_Params_Allow_Repeat')
             end
         end,
-        Function = function()
+        eventBehavior = function()
             local playerPed = PlayerPedId()
             local coords = GetEntityCoords(playerPed)
             local x, y, z = table.unpack(getSpawnLocation(coords))
@@ -98,21 +91,21 @@ Config.Events = {
             -- TaskLookAtEntity(ped, playerPed, 60.0, 2048, 3)
 
             InitQbTargetForEntity(ped)
-            return {ped}, nil, playerPed
+            return ped, nil, playerPed
         end
     }, {
         name = 'SeekPlayer2',
         timings = {
-            ActiveDuration = 5000, -- set free enntites after target left for this duration
-            CooldownDruration = 2000, -- cooldown after triggered once
-            ChanceToTrigger = 100, -- 50% after every cooldown
-            maximumActiveSessionsForOnePlayer = 0 -- this should controlled by server
+            activeEventDuration = 50000,
+            spawnCooldown = 2000,
+            chanceToTrigger = 50,
+            maxSessions = 0
         },
         isTargetDead = function()
             local playerPed = PlayerPedId()
             return isTargetedPedDead(playerPed)
         end,
-        Function = function()
+        eventBehavior = function()
             local playerPed = PlayerPedId()
             local coords = GetEntityCoords(playerPed)
             local x, y, z = table.unpack(getSpawnLocation(coords))
@@ -128,6 +121,115 @@ Config.Events = {
             InitQbTargetForEntity(ped)
             return ped, nil, playerPed
         end
+    }, {
+        name = 'Heli',
+        timings = {
+            activeEventDuration = 60000,
+            spawnCooldown = 2000,
+            chanceToTrigger = 50,
+            maxSessions = 0
+        },
+        isTargetDead = function()
+            local playerPed = PlayerPedId()
+            return isTargetedPedDead(playerPed)
+        end,
+        customDistance = function(distance, ped, info)
+            if distance <= 5 then
+                ChatWithTarget(ped, GetPlayerPed(-1))
+                PlayPedAmbientSpeechNative(ped, 'GENERIC_HI',
+                                           'Speech_Params_Allow_Repeat')
+            end
+        end,
+        eventBehavior = function()
+            local playerPed = PlayerPedId()
+            local coords = GetEntityCoords(playerPed)
+            local x, y, z = table.unpack(getSpawnLocation(coords))
+
+            local pedHash = GetHashKey('S_M_M_HighSec_05')
+            WaitUntilModelLoaded(pedHash)
+            local vehiclemodel = GetHashKey('Frogger')
+            -- while loops to ensure the models are actually loaded
+            WaitUntilModelLoaded(vehiclemodel)
+            -- Create vehicle + ped
+            local pedveh = CreateVehicle(vehiclemodel, x, y, z + 80.0, 0, true,
+                                         false)
+            local ped = CreatePedInsideVehicle(pedveh, 2, pedHash, -1, true,
+                                               true)
+            local ped2 = CreatePedInsideVehicle(pedveh, 2, pedHash, 0, true,
+                                                true)
+            giveWeaponToPed(ped2, 'weapon_rifle')
+            SetPedFiringPattern(ped --[[ Ped ]] ,
+                                GetHashKey('FIRING_PATTERN_BURST_FIRE_HELI') --[[ Hash ]] )
+
+            AttackTargetedPed(ped2, playerPed)
+            AddBlipForEntity(ped --[[ Entity ]] )
+            TaskHeliChase(ped, playerPed, 0.0, 0.0, 15.0)
+
+            -- InitQbTargetForEntity(ped)
+            return ped, pedveh, playerPed
+        end
+    }, {
+        name = 'PolyzoneSpawn',
+        timings = {
+            activeEventDuration = 60000,
+            spawnCooldown = 5000,
+            chanceToTrigger = 100,
+            maxSessions = 2
+        },
+        Zone = function()
+            -- eventBehavior will only excuted when player is inside provided area
+            local coord = vector4(-71.04, 6266.42, 31.12, 212.35)
+            local x, y, z, w = table.unpack(coord)
+            local BOX_A = BoxZone:Create(coord, 2.0, 6.5, {
+                name = 'BOX_A',
+                useZ = true,
+                heading = w,
+                maxZ = z + 1.5,
+                minZ = z - 1.5,
+                debugPoly = true
+            })
+
+            -- this part is just visualation of eventBehavior to see where npcs are coming form!
+            local staticPosition = {
+                vector3(-71.13, 6243.63, 31.07),
+                vector3(-83.12, 6240.64, 31.09),
+                vector3(-73.59, 6224.65, 31.09), vector3(-84.18, 6218.9, 31.09)
+            }
+            for key, value in pairs(staticPosition) do
+                local x, y, z = table.unpack(value)
+                BoxZone:Create(value, 1.0, 1.0, {
+                    name = 'test' .. key,
+                    useZ = true,
+                    maxZ = z + 1.5,
+                    minZ = z - 1.5,
+                    debugPoly = true
+                })
+            end
+            ----------------------------------------------------------------------------------------------------
+
+            return BOX_A
+        end,
+        eventBehavior = function()
+            local playerPed = PlayerPedId()
+            -- spawn locations
+            local staticPosition = {
+                vector3(-71.13, 6243.63, 31.07),
+                vector3(-83.12, 6240.64, 31.09),
+                vector3(-73.59, 6224.65, 31.09), vector3(-84.18, 6218.9, 31.09)
+            }
+            -- choice one of spawn locations
+            local chnaced = Alias_table_wrapper({25, 25, 25, 25})
+            local x, y, z = table.unpack(staticPosition[chnaced])
+
+            local pedHash = GetHashKey('S_M_M_HighSec_05')
+
+            WaitUntilModelLoaded(pedHash)
+            local ped = CreatePed(2, pedHash, x, y, z, 0, true, false)
+            GivePedRandomVoice(ped, 'MALE', 'LATINO') -- set voice for ped!
+            giveWeaponToPed(ped, 'weapon_smg')
+            AttackTargetedPed(ped, playerPed)
+            return ped, nil, playerPed
+        end
     }
 }
 
@@ -141,7 +243,6 @@ function InitQbTargetForEntity(Entity)
                 label = "Get Package",
                 action = function(entity)
                     if IsPedAPlayer(entity) then return false end
-                    -- PlayPedAmbientSpeechNative(entity , 'GENERIC_HI'  , 'SPEECH_PARAMS_FORCE'  )
                     PlayPedAmbientSpeechNative(entity, 'GENERIC_THANKS',
                                                'SPEECH_PARAMS_FORCE')
                     TriggerServerEvent('AngryAi:server:sellPackage')
